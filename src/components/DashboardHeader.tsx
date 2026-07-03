@@ -46,7 +46,7 @@ export function DashboardHeader() {
             by Josh B.
           </p>
           <h1 className="mt-1 text-2xl font-semibold leading-none tracking-tight">
-            Telemetritize
+            Telemetrize
             <span className="text-primary">.</span>
           </h1>
         </div>
