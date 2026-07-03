@@ -54,6 +54,8 @@ export function Dashboard() {
           point at a WebSocket URL to go live
         </span>
       </footer>
+
+      <DemoControlPanel />
     </div>
   );
 }
