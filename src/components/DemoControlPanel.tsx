@@ -126,7 +126,7 @@ export function DemoControlPanel() {
               </button>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid max-h-44 grid-cols-2 gap-2 overflow-y-auto pr-1">
             {gpuIds.map((id) => {
               const isFaulted = faulted.includes(id);
               return (
@@ -141,7 +141,7 @@ export function DemoControlPanel() {
                       : "border-border text-muted-foreground hover:border-amber-500/50 hover:text-amber-400"
                   )}
                 >
-                  {isFaulted && <AlertTriangle className="h-3 w-3" />}
+                  {isFaulted && <AlertTriangle className="h-3 w-3 shrink-0" />}
                   {id.replace("gpu-", "GPU ")}
                 </button>
               );

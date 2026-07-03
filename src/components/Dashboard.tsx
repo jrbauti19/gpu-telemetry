@@ -1,8 +1,35 @@
+import { useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { DemoControlPanel } from "@/components/DemoControlPanel";
 import { FleetSummary } from "@/components/FleetSummary";
 import { GpuNodeCard } from "@/components/GpuNodeCard";
-import { useGpuIds, useTelemetryConnection } from "@/store/telemetryStore";
+import {
+  useGpuIds,
+  useStatus,
+  useTelemetryConnection,
+} from "@/store/telemetryStore";
+
+/**
+ * Fire a success toast when the stream comes back — but only after a
+ * genuine drop, so the initial idle -> connecting -> connected boot
+ * sequence stays quiet.
+ */
+function useReconnectToast() {
+  const status = useStatus();
+  const droppedRef = useRef(false);
+
+  useEffect(() => {
+    if (status === "disconnected") {
+      droppedRef.current = true;
+    } else if (status === "connected" && droppedRef.current) {
+      droppedRef.current = false;
+      toast.success("Reconnected", {
+        description: "Telemetry stream restored.",
+      });
+    }
+  }, [status]);
+}
 
 /**
  * Top-level dashboard. Opens the telemetry connection and lays out the
@@ -12,6 +39,7 @@ import { useGpuIds, useTelemetryConnection } from "@/store/telemetryStore";
  */
 export function Dashboard() {
   useTelemetryConnection();
+  useReconnectToast();
   const gpuIds = useGpuIds();
 
   return (

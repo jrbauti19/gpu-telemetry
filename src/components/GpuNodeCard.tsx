@@ -1,8 +1,9 @@
 import { memo } from "react";
+import { WifiOff } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { TelemetryChart } from "@/components/TelemetryChart";
-import { useGpuSnapshot } from "@/store/telemetryStore";
+import { useGpuSnapshot, useStatus } from "@/store/telemetryStore";
 import {
   severityFor,
   severityStroke,
@@ -50,6 +51,7 @@ export const GpuNodeCard = memo(function GpuNodeCard({
   gpuId,
 }: GpuNodeCardProps) {
   const snapshot = useGpuSnapshot(gpuId);
+  const disconnected = useStatus() === "disconnected";
 
   if (!snapshot) {
     return (
@@ -97,14 +99,30 @@ export const GpuNodeCard = memo(function GpuNodeCard({
   return (
     <Card
       className={cn(
-        "overflow-hidden transition-colors duration-300 hover:border-border/80",
-        isCritical && "border-red-500/60"
+        "relative overflow-hidden transition-colors duration-300 hover:border-border/80",
+        isCritical && !disconnected && "border-red-500/60",
+        disconnected && "border-border/60"
       )}
     >
+      {disconnected && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-card/80 backdrop-blur-sm">
+          <WifiOff className="h-6 w-6 text-muted-foreground" />
+          <p className="text-sm font-medium text-foreground">
+            Connection dropped
+          </p>
+          <p className="font-mono text-[11px] text-muted-foreground">
+            awaiting reconnection…
+          </p>
+        </div>
+      )}
       <div
         className={cn(
           "h-px w-full",
-          isCritical ? "bg-red-500" : "bg-primary/50"
+          disconnected
+            ? "bg-border"
+            : isCritical
+              ? "bg-red-500"
+              : "bg-primary/50"
         )}
       />
       <CardHeader className="flex-row items-baseline justify-between space-y-0 pb-4">
