@@ -1,9 +1,10 @@
 import { memo } from "react";
-import { WifiOff } from "lucide-react";
+import { Maximize2, WifiOff } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { TelemetryChart } from "@/components/TelemetryChart";
 import { useGpuSnapshot, useStatus } from "@/store/telemetryStore";
+import { useSelectGpu } from "@/store/uiStore";
 import {
   severityFor,
   severityStroke,
@@ -52,6 +53,7 @@ export const GpuNodeCard = memo(function GpuNodeCard({
 }: GpuNodeCardProps) {
   const snapshot = useGpuSnapshot(gpuId);
   const disconnected = useStatus() === "disconnected";
+  const selectGpu = useSelectGpu();
 
   if (!snapshot) {
     return (
@@ -98,8 +100,19 @@ export const GpuNodeCard = memo(function GpuNodeCard({
 
   return (
     <Card
+      role="button"
+      tabIndex={0}
+      aria-label={`View details for ${gpuId}`}
+      onClick={() => selectGpu(gpuId)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          selectGpu(gpuId);
+        }
+      }}
       className={cn(
-        "relative overflow-hidden transition-colors duration-300 hover:border-border/80",
+        "group relative cursor-pointer overflow-hidden outline-none transition-colors duration-300",
+        "hover:border-primary/40 focus-visible:border-primary/60 focus-visible:ring-1 focus-visible:ring-primary/40",
         isCritical && !disconnected && "border-red-500/60",
         disconnected && "border-border/60"
       )}
@@ -132,14 +145,17 @@ export const GpuNodeCard = memo(function GpuNodeCard({
           </p>
           <p className="font-mono text-xs text-muted-foreground">{metric.model}</p>
         </div>
-        <span
-          className={cn(
-            "font-mono text-[11px] font-medium tracking-wide",
-            isCritical ? "text-red-400" : "text-muted-foreground"
-          )}
-        >
-          {isCritical ? "● CRITICAL" : "○ nominal"}
-        </span>
+        <div className="flex items-center gap-2">
+          <Maximize2 className="h-3.5 w-3.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+          <span
+            className={cn(
+              "font-mono text-[11px] font-medium tracking-wide",
+              isCritical ? "text-red-400" : "text-muted-foreground"
+            )}
+          >
+            {isCritical ? "● CRITICAL" : "○ nominal"}
+          </span>
+        </div>
       </CardHeader>
 
       <CardContent className="space-y-5">

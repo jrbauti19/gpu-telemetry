@@ -4,8 +4,10 @@ import { ArchitectureTab } from "@/components/ArchitectureTab";
 import { Dashboard } from "@/components/Dashboard";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { DemoControlPanel } from "@/components/DemoControlPanel";
+import { GpuDetailDrawer } from "@/components/GpuDetailDrawer";
 import { TabNav, type TabKey } from "@/components/TabNav";
 import { useStatus, useTelemetryConnection } from "@/store/telemetryStore";
+import { useSelectGpu } from "@/store/uiStore";
 
 /**
  * Fire a success toast when the stream comes back — but only after a
@@ -35,12 +37,18 @@ export default function App() {
   useReconnectToast();
 
   const [tab, setTab] = useState<TabKey>("dashboard");
+  const selectGpu = useSelectGpu();
+
+  const changeTab = (next: TabKey) => {
+    if (next !== "dashboard") selectGpu(null); // don't leave the drawer open
+    setTab(next);
+  };
 
   return (
     <div className="min-h-full">
       <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-10">
         <DashboardHeader />
-        <TabNav value={tab} onChange={setTab} />
+        <TabNav value={tab} onChange={changeTab} />
 
         {tab === "dashboard" ? <Dashboard /> : <ArchitectureTab />}
 
@@ -55,6 +63,7 @@ export default function App() {
       </div>
 
       {tab === "dashboard" && <DemoControlPanel />}
+      {tab === "dashboard" && <GpuDetailDrawer />}
 
       <Toaster
         theme="dark"
