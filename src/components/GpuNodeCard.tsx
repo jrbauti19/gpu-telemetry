@@ -128,7 +128,7 @@ export const GpuNodeCard = memo(function GpuNodeCard({
       <CardHeader className="flex-row items-baseline justify-between space-y-0 pb-4">
         <div className="flex items-baseline gap-2.5">
           <p className="font-mono text-base font-semibold tracking-tight">
-            {gpuId.replace("gpu-", "GPU ")}
+            {gpuId}
           </p>
           <p className="font-mono text-xs text-muted-foreground">{metric.model}</p>
         </div>

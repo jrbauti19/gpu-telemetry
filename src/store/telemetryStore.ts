@@ -73,6 +73,8 @@ interface TelemetryState {
   addNode: () => void;
   /** Demo: remove a node (defaults to the most recently added). */
   removeNode: (gpuId?: string) => void;
+  /** Demo: scale the fleet to exactly `count` nodes. */
+  scaleCluster: (count: number) => void;
   /** Demo: simulate a network blip without discarding the stream. */
   toggleConnection: () => void;
 }
@@ -135,74 +137,145 @@ let stream: TelemetryStream | null = null;
 let unsubMessage: (() => void) | null = null;
 let unsubStatus: (() => void) | null = null;
 
+// Render throttle. The stream may emit at ~60fps, but re-rendering every
+// visible card (and its charts) that often saturates the main thread and
+// makes scrolling stutter. We buffer the latest frame and flush it to React
+// at most once per RENDER_INTERVAL_MS — dropping intermediate frames —
+// coalesced onto the browser's animation frame. Data stays live; the UI just
+// stops repainting faster than the eye can see.
+const RENDER_INTERVAL_MS = 50; // ~20fps UI refresh
+let pendingFrame: TelemetryFrame | null = null;
+let flushRaf: number | null = null;
+let lastFlush = 0;
+
 /**
  * Global telemetry store. Zustand is itself built on
  * `useSyncExternalStore`, so component selectors still re-render only
  * when the slice they read actually changes (the status header ignores
  * data ticks; each card watches just its own GPU).
  */
-export const useTelemetryStore = create<TelemetryState>((set, get) => ({
-  status: "idle",
-  gpuIds: [],
-  snapshots: {},
-  aggregate: EMPTY_AGGREGATE,
-  lastTimestamp: 0,
-  faultedGpuIds: [],
+export const useTelemetryStore = create<TelemetryState>((set, get) => {
+  const applyFrame = (frame: TelemetryFrame) =>
+    set(reduceFrame(get(), frame));
 
-  connect: () => {
-    if (stream) return; // already connected
-    stream = streamFactory();
-    unsubStatus = stream.onStatusChange((status) => set({ status }));
-    unsubMessage = stream.onMessage((frame) => set(reduceFrame(get(), frame)));
-    stream.connect();
-  },
+  // Apply the buffered frame right now. Used by control actions that need
+  // gpuIds to be fresh immediately after mutating the fleet.
+  const flushNow = () => {
+    if (flushRaf !== null) {
+      cancelAnimationFrame(flushRaf);
+      flushRaf = null;
+    }
+    if (pendingFrame) {
+      const frame = pendingFrame;
+      pendingFrame = null;
+      lastFlush = performance.now();
+      applyFrame(frame);
+    }
+  };
 
-  disconnect: () => {
-    unsubMessage?.();
-    unsubStatus?.();
-    unsubMessage = null;
-    unsubStatus = null;
-    stream?.disconnect();
-    stream = null;
-    set({ faultedGpuIds: [] });
-  },
+  // Coalesced, rate-limited flush of the latest buffered frame.
+  const scheduleFlush = () => {
+    if (flushRaf !== null) return;
+    const run = () => {
+      flushRaf = null;
+      if (performance.now() - lastFlush < RENDER_INTERVAL_MS) {
+        flushRaf = requestAnimationFrame(run); // too soon; retry next frame
+        return;
+      }
+      if (pendingFrame) {
+        const frame = pendingFrame;
+        pendingFrame = null;
+        lastFlush = performance.now();
+        applyFrame(frame);
+      }
+    };
+    flushRaf = requestAnimationFrame(run);
+  };
 
-  toggleFault: (gpuId) => {
-    if (!stream || !supportsControls(stream)) return;
-    const faulted = get().faultedGpuIds.includes(gpuId);
-    stream.setFault(gpuId, !faulted);
-    set({
-      faultedGpuIds: faulted
-        ? get().faultedGpuIds.filter((id) => id !== gpuId)
-        : [...get().faultedGpuIds, gpuId],
-    });
-  },
+  const stopFlush = () => {
+    if (flushRaf !== null) cancelAnimationFrame(flushRaf);
+    flushRaf = null;
+    pendingFrame = null;
+  };
 
-  clearFaults: () => {
-    if (stream && supportsControls(stream)) stream.clearFaults();
-    set({ faultedGpuIds: [] });
-  },
+  return {
+    status: "idle",
+    gpuIds: [],
+    snapshots: {},
+    aggregate: EMPTY_AGGREGATE,
+    lastTimestamp: 0,
+    faultedGpuIds: [],
 
-  addNode: () => {
-    if (stream && supportsControls(stream)) stream.addNode();
-  },
+    connect: () => {
+      if (stream) return; // already connected
+      stream = streamFactory();
+      unsubStatus = stream.onStatusChange((status) => set({ status }));
+      unsubMessage = stream.onMessage((frame) => {
+        pendingFrame = frame;
+        scheduleFlush();
+      });
+      stream.connect();
+    },
 
-  removeNode: (gpuId) => {
-    if (!stream || !supportsControls(stream)) return;
-    stream.removeNode(gpuId);
-    // The mock emits a frame synchronously, so gpuIds is already fresh;
-    // drop any fault ids that no longer correspond to a live node.
-    const live = new Set(get().gpuIds);
-    set({ faultedGpuIds: get().faultedGpuIds.filter((id) => live.has(id)) });
-  },
+    disconnect: () => {
+      unsubMessage?.();
+      unsubStatus?.();
+      unsubMessage = null;
+      unsubStatus = null;
+      stopFlush();
+      stream?.disconnect();
+      stream = null;
+      set({ faultedGpuIds: [] });
+    },
 
-  toggleConnection: () => {
-    if (!stream) return;
-    const s = get().status;
-    if (s === "connected" || s === "connecting") stream.disconnect();
-    else stream.connect();
-  },
-}));
+    toggleFault: (gpuId) => {
+      if (!stream || !supportsControls(stream)) return;
+      const faulted = get().faultedGpuIds.includes(gpuId);
+      stream.setFault(gpuId, !faulted);
+      set({
+        faultedGpuIds: faulted
+          ? get().faultedGpuIds.filter((id) => id !== gpuId)
+          : [...get().faultedGpuIds, gpuId],
+      });
+    },
+
+    clearFaults: () => {
+      if (stream && supportsControls(stream)) stream.clearFaults();
+      set({ faultedGpuIds: [] });
+    },
+
+    addNode: () => {
+      if (!stream || !supportsControls(stream)) return;
+      stream.addNode();
+      flushNow(); // surface the new node immediately
+    },
+
+    removeNode: (gpuId) => {
+      if (!stream || !supportsControls(stream)) return;
+      stream.removeNode(gpuId);
+      // Apply the freshly-emitted frame now so gpuIds is current, then drop
+      // any fault ids that no longer correspond to a live node.
+      flushNow();
+      const live = new Set(get().gpuIds);
+      set({ faultedGpuIds: get().faultedGpuIds.filter((id) => live.has(id)) });
+    },
+
+    scaleCluster: (count) => {
+      if (!stream || !supportsControls(stream)) return;
+      stream.setNodeCount(count);
+      flushNow();
+      const live = new Set(get().gpuIds);
+      set({ faultedGpuIds: get().faultedGpuIds.filter((id) => live.has(id)) });
+    },
+
+    toggleConnection: () => {
+      if (!stream) return;
+      const s = get().status;
+      if (s === "connected" || s === "connecting") stream.disconnect();
+      else stream.connect();
+    },
+  };
+});
 
 // ---- Selector hooks -------------------------------------------------------
 // One hook per concern. Each subscribes to exactly one slice.
@@ -233,6 +306,9 @@ export const useLastTimestamp = (): number =>
 
 export const useFaultedGpuIds = (): string[] =>
   useTelemetryStore((s) => s.faultedGpuIds);
+
+export const useScaleCluster = (): ((count: number) => void) =>
+  useTelemetryStore((s) => s.scaleCluster);
 
 /** Bundle of demo actions for the failure-injection panel. */
 export function useDemoControls() {

@@ -72,6 +72,8 @@ export interface TelemetryControls {
   addNode(): string;
   /** Remove a node (defaults to the most recently added). */
   removeNode(gpuId?: string): void;
+  /** Grow or shrink the fleet to exactly `count` nodes. */
+  setNodeCount(count: number): void;
 }
 
 /** Narrow a stream to one that also supports the demo control surface. */

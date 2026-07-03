@@ -16,6 +16,9 @@ import {
 } from "@/store/telemetryStore";
 import { cn } from "@/lib/utils";
 
+/** Cap the per-node fault buttons so the panel stays light at scale. */
+const MAX_FAULT_BUTTONS = 24;
+
 /**
  * Floating demo/testing panel. Lets a viewer inject synthetic faults,
  * grow/shrink the fleet, and simulate a network blip at runtime — a
@@ -127,22 +130,23 @@ export function DemoControlPanel() {
             )}
           </div>
           <div className="grid max-h-44 grid-cols-2 gap-2 overflow-y-auto pr-1">
-            {gpuIds.map((id) => {
+            {gpuIds.slice(0, MAX_FAULT_BUTTONS).map((id) => {
               const isFaulted = faulted.includes(id);
               return (
                 <button
                   key={id}
                   onClick={() => toggleFault(id)}
                   aria-pressed={isFaulted}
+                  title={id}
                   className={cn(
-                    "flex items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 font-mono text-xs transition-colors",
+                    "flex items-center justify-center gap-1.5 truncate rounded-md border px-2 py-1.5 font-mono text-xs transition-colors",
                     isFaulted
                       ? "border-red-500/50 bg-red-500/15 text-red-400"
                       : "border-border text-muted-foreground hover:border-amber-500/50 hover:text-amber-400"
                   )}
                 >
                   {isFaulted && <AlertTriangle className="h-3 w-3 shrink-0" />}
-                  {id.replace("gpu-", "GPU ")}
+                  <span className="truncate">{id}</span>
                 </button>
               );
             })}
@@ -152,6 +156,12 @@ export function DemoControlPanel() {
               </p>
             )}
           </div>
+          {gpuIds.length > MAX_FAULT_BUTTONS && (
+            <p className="text-[11px] text-muted-foreground">
+              Showing first {MAX_FAULT_BUTTONS} of{" "}
+              {gpuIds.length.toLocaleString()} nodes.
+            </p>
+          )}
         </section>
       </div>
     </div>

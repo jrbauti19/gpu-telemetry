@@ -39,16 +39,44 @@ interface GpuSimState {
   fault: boolean;
 }
 
-const TICK_MS = 2500;
+/** ~30 frames per second. */
+const TICK_MS = 1000 / 30;
+/**
+ * The cadence the simulation constants were originally tuned for. Every
+ * per-tick rate below is multiplied by {@link SIM_STEP} so the signals
+ * evolve at the same wall-clock speed regardless of {@link TICK_MS} —
+ * i.e. the sim is frame-rate independent.
+ */
+const BASELINE_TICK_MS = 2500;
+const SIM_STEP = TICK_MS / BASELINE_TICK_MS;
 const CONNECT_LATENCY_MS = 450;
 
-/** Four MI300X-class nodes, matching a typical single-server tray. */
-const GPU_PROFILES: GpuProfile[] = [
-  { gpuId: "gpu-0", model: "AMD Instinct MI300X", vramTotal: 192 },
-  { gpuId: "gpu-1", model: "AMD Instinct MI300X", vramTotal: 192 },
-  { gpuId: "gpu-2", model: "AMD Instinct MI300X", vramTotal: 192 },
-  { gpuId: "gpu-3", model: "AMD Instinct MI300X", vramTotal: 192 },
-];
+/** Nodes present on first connect (a typical single-server tray x2). */
+const INITIAL_NODE_COUNT = 8;
+/** Hard ceiling to keep the demo from allocating unbounded state. */
+const MAX_NODE_COUNT = 10000;
+
+/**
+ * Monotonic counter backing each GPU's serial. Guarantees ids are
+ * unique and stable for the session even as nodes are added/removed.
+ */
+let serialCounter = 0;
+
+/** Mint a unique, hardware-style serial, e.g. "GPU-0A3F9C". */
+function makeSerial(): string {
+  const hex = (serialCounter++).toString(16).toUpperCase().padStart(6, "0");
+  return `GPU-${hex}`;
+}
+
+/** Build a fresh MI300X profile with a unique serial id. */
+function makeProfile(): GpuProfile {
+  return { gpuId: makeSerial(), model: "AMD Instinct MI300X", vramTotal: 192 };
+}
+
+const GPU_PROFILES: GpuProfile[] = Array.from(
+  { length: INITIAL_NODE_COUNT },
+  makeProfile
+);
 
 const RANGES = {
   utilization: { min: 0, max: 100, volatility: 0.08 } as MetricRange,
@@ -65,11 +93,11 @@ const clamp = (value: number, min: number, max: number): number =>
  * random impulse with a gentle pull toward the range midpoint so the
  * signal wanders realistically without sticking to the rails.
  */
-function randomWalk(current: number, range: MetricRange): number {
+function randomWalk(current: number, range: MetricRange, dt: number): number {
   const span = range.max - range.min;
-  const impulse = (Math.random() - 0.5) * 2 * range.volatility * span;
+  const impulse = (Math.random() - 0.5) * 2 * range.volatility * span * dt;
   const midpoint = (range.min + range.max) / 2;
-  const meanReversion = (midpoint - current) * 0.02;
+  const meanReversion = (midpoint - current) * 0.02 * dt;
   return clamp(current + impulse + meanReversion, range.min, range.max);
 }
 
@@ -89,12 +117,9 @@ export class MockTelemetryStream implements TelemetryStream, TelemetryControls {
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private connectTimer: ReturnType<typeof setTimeout> | null = null;
   private state: GpuSimState[];
-  /** Monotonic counter so re-added nodes never reuse an id. */
-  private nextId: number;
 
   constructor(profiles: GpuProfile[] = GPU_PROFILES) {
     this.state = profiles.map((profile, i) => this.seedNode(profile, i));
-    this.nextId = profiles.length;
   }
 
   /** Build the initial sim state for one node at a plausible operating point. */
@@ -164,16 +189,24 @@ export class MockTelemetryStream implements TelemetryStream, TelemetryControls {
   }
 
   addNode(): string {
-    const gpuId = `gpu-${this.nextId++}`;
-    const profile: GpuProfile = {
-      gpuId,
-      model: "AMD Instinct MI300X",
-      vramTotal: 192,
-    };
+    const profile = makeProfile();
     this.state.push(this.seedNode(profile, this.state.length));
     // Surface the new node immediately if we're already streaming.
     if (this.status === "connected") this.emitFrame();
-    return gpuId;
+    return profile.gpuId;
+  }
+
+  /** Grow or shrink the fleet to exactly `count` nodes. */
+  setNodeCount(count: number): void {
+    const target = Math.max(0, Math.min(MAX_NODE_COUNT, Math.floor(count)));
+    if (target < this.state.length) {
+      this.state.length = target; // truncate from the tail
+    } else {
+      while (this.state.length < target) {
+        this.state.push(this.seedNode(makeProfile(), this.state.length));
+      }
+    }
+    if (this.status === "connected") this.emitFrame();
   }
 
   removeNode(gpuId?: string): void {
@@ -192,9 +225,9 @@ export class MockTelemetryStream implements TelemetryStream, TelemetryControls {
     const gpus: GpuMetric[] = this.state.map((s) => {
       // Utilization drives the system: a slow sine "workload wave"
       // blended with a random walk gives believable bursty load.
-      s.phase += 0.05;
+      s.phase += 0.05 * SIM_STEP;
       const workloadWave = (Math.sin(s.phase) + 1) / 2; // 0..1
-      const walked = randomWalk(s.utilization, RANGES.utilization);
+      const walked = randomWalk(s.utilization, RANGES.utilization, SIM_STEP);
       s.utilization = clamp(
         walked * 0.7 + workloadWave * 100 * 0.3,
         RANGES.utilization.min,
@@ -208,7 +241,9 @@ export class MockTelemetryStream implements TelemetryStream, TelemetryControls {
         RANGES.temperature.min +
         loadFactor * (RANGES.temperature.max - RANGES.temperature.min - 5);
       s.temperature = clamp(
-        s.temperature + (tempTarget - s.temperature) * 0.1 + (Math.random() - 0.5),
+        s.temperature +
+          (tempTarget - s.temperature) * 0.1 * SIM_STEP +
+          (Math.random() - 0.5) * SIM_STEP,
         RANGES.temperature.min,
         RANGES.temperature.max
       );
@@ -217,25 +252,40 @@ export class MockTelemetryStream implements TelemetryStream, TelemetryControls {
         RANGES.powerDraw.min +
         loadFactor * (RANGES.powerDraw.max - RANGES.powerDraw.min);
       s.powerDraw = clamp(
-        s.powerDraw + (powerTarget - s.powerDraw) * 0.15 + (Math.random() - 0.5) * 10,
+        s.powerDraw +
+          (powerTarget - s.powerDraw) * 0.15 * SIM_STEP +
+          (Math.random() - 0.5) * 10 * SIM_STEP,
         RANGES.powerDraw.min,
         RANGES.powerDraw.max
       );
 
       // VRAM drifts more slowly and independently (model/batch size).
-      s.vramUsage = randomWalk(s.vramUsage, {
-        ...RANGES.vramUsage,
-        max: s.profile.vramTotal,
-      });
+      s.vramUsage = randomWalk(
+        s.vramUsage,
+        { ...RANGES.vramUsage, max: s.profile.vramTotal },
+        SIM_STEP
+      );
 
       // Injected fault: ramp hard toward a sustained critical state so
       // the UI thresholds and alert styling light up on the next ticks.
       if (s.fault) {
-        s.utilization = clamp(s.utilization + (100 - s.utilization) * 0.5, 0, 100);
-        s.temperature = clamp(s.temperature + (89 - s.temperature) * 0.4, 30, 90);
-        s.powerDraw = clamp(s.powerDraw + (690 - s.powerDraw) * 0.4, 100, 700);
+        s.utilization = clamp(
+          s.utilization + (100 - s.utilization) * 0.5 * SIM_STEP,
+          0,
+          100
+        );
+        s.temperature = clamp(
+          s.temperature + (89 - s.temperature) * 0.4 * SIM_STEP,
+          30,
+          90
+        );
+        s.powerDraw = clamp(
+          s.powerDraw + (690 - s.powerDraw) * 0.4 * SIM_STEP,
+          100,
+          700
+        );
         s.vramUsage = clamp(
-          s.vramUsage + (s.profile.vramTotal - s.vramUsage) * 0.4,
+          s.vramUsage + (s.profile.vramTotal - s.vramUsage) * 0.4 * SIM_STEP,
           0,
           s.profile.vramTotal
         );
