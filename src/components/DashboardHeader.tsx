@@ -1,12 +1,9 @@
-import { useLastTimestamp } from "@/hooks/useGpuTelemetry";
-import type { TelemetryStore } from "@/telemetry/TelemetryStore";
+import { Github } from "lucide-react";
+import { useLastTimestamp, useStatus } from "@/store/telemetryStore";
 import type { ConnectionStatus } from "@/telemetry/types";
 import { cn } from "@/lib/utils";
 
-interface DashboardHeaderProps {
-  status: ConnectionStatus;
-  store: TelemetryStore;
-}
+const REPO_URL = "https://github.com/jrbauti19/gpu-telemetry";
 
 const STATUS_META: Record<
   ConnectionStatus,
@@ -18,8 +15,8 @@ const STATUS_META: Record<
   disconnected: { label: "OFFLINE", dot: "bg-red-500", text: "text-red-400" },
 };
 
-function LastUpdate({ store }: { store: TelemetryStore }) {
-  const ts = useLastTimestamp(store);
+function LastUpdate() {
+  const ts = useLastTimestamp();
   return (
     <span className="font-mono text-[11px] text-muted-foreground">
       last frame&nbsp;
@@ -34,7 +31,8 @@ function LastUpdate({ store }: { store: TelemetryStore }) {
  * Top bar with branding and connection state. The status readout only
  * re-renders on lifecycle changes, not on data ticks.
  */
-export function DashboardHeader({ status, store }: DashboardHeaderProps) {
+export function DashboardHeader() {
+  const status = useStatus();
   const meta = STATUS_META[status];
   return (
     <header className="flex flex-col gap-4 pb-6 sm:flex-row sm:items-end sm:justify-between">
@@ -68,8 +66,18 @@ export function DashboardHeader({ status, store }: DashboardHeaderProps) {
           </span>
           <span className="text-border">/</span>
           <span className="font-mono text-xs text-muted-foreground">RACK-A</span>
+          <a
+            href={REPO_URL}
+            target="_blank"
+            rel="noreferrer noopener"
+            aria-label="View source on GitHub"
+            title="View source on GitHub"
+            className="ml-1 text-muted-foreground transition-colors hover:text-primary"
+          >
+            <Github className="h-4 w-4" />
+          </a>
         </div>
-        <LastUpdate store={store} />
+        <LastUpdate />
       </div>
     </header>
   );

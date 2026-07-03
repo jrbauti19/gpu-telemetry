@@ -1,5 +1,4 @@
-import { useFleetAggregate } from "@/hooks/useGpuTelemetry";
-import type { TelemetryStore } from "@/telemetry/TelemetryStore";
+import { useFleetAggregate } from "@/store/telemetryStore";
 import {
   severityFor,
   severityTextClass,
@@ -36,8 +35,8 @@ function Stat({ label, value, unit, colorClass }: StatProps) {
 }
 
 /** Fleet-wide readout rail. Reads the cached aggregate; updates per tick. */
-export function FleetSummary({ store }: { store: TelemetryStore }) {
-  const agg = useFleetAggregate(store);
+export function FleetSummary() {
+  const agg = useFleetAggregate();
 
   const tempSeverity = severityFor(
     agg.maxTemperature,

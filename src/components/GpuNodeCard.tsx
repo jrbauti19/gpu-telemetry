@@ -2,8 +2,7 @@ import { memo } from "react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { TelemetryChart } from "@/components/TelemetryChart";
-import { useGpuSnapshot } from "@/hooks/useGpuTelemetry";
-import type { TelemetryStore } from "@/telemetry/TelemetryStore";
+import { useGpuSnapshot } from "@/store/telemetryStore";
 import {
   severityFor,
   severityStroke,
@@ -13,7 +12,6 @@ import {
 import { cn } from "@/lib/utils";
 
 interface GpuNodeCardProps {
-  store: TelemetryStore;
   gpuId: string;
 }
 
@@ -49,10 +47,9 @@ function Readout({ label, value, unit, colorClass }: ReadoutProps) {
  * same tick don't force it to re-render unnecessarily.
  */
 export const GpuNodeCard = memo(function GpuNodeCard({
-  store,
   gpuId,
 }: GpuNodeCardProps) {
-  const snapshot = useGpuSnapshot(store, gpuId);
+  const snapshot = useGpuSnapshot(gpuId);
 
   if (!snapshot) {
     return (

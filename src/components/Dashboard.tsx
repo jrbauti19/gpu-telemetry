@@ -1,23 +1,24 @@
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { FleetSummary } from "@/components/FleetSummary";
 import { GpuNodeCard } from "@/components/GpuNodeCard";
-import { useGpuTelemetry } from "@/hooks/useGpuTelemetry";
+import { useGpuIds, useTelemetryConnection } from "@/store/telemetryStore";
 
 /**
- * Top-level dashboard. Owns the telemetry store lifecycle and lays out
- * the header, fleet KPIs, and the grid of GPU node cards. Each card
- * subscribes to its own slice, so a data tick never re-renders this
- * component tree — only the leaves whose data changed.
+ * Top-level dashboard. Opens the telemetry connection and lays out the
+ * header, fleet KPIs, and the grid of GPU node cards. Each child reads
+ * its own slice from the Zustand store, so a data tick only re-renders
+ * the leaves whose data changed.
  */
 export function Dashboard() {
-  const { store, status, gpuIds } = useGpuTelemetry();
+  useTelemetryConnection();
+  const gpuIds = useGpuIds();
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-10">
-      <DashboardHeader status={status} store={store} />
+      <DashboardHeader />
 
       <div className="mt-2 space-y-8">
-        <FleetSummary store={store} />
+        <FleetSummary />
 
         <section>
           <div className="mb-4 flex items-baseline justify-between border-b border-border pb-2">
@@ -33,7 +34,7 @@ export function Dashboard() {
                 className="animate-fade-in"
                 style={{ animationDelay: `${i * 60}ms` }}
               >
-                <GpuNodeCard store={store} gpuId={id} />
+                <GpuNodeCard gpuId={id} />
               </div>
             ))}
             {gpuIds.length === 0 && (

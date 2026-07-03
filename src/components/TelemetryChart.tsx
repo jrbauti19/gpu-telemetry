@@ -8,7 +8,7 @@ import {
   YAxis,
   type TooltipProps,
 } from "recharts";
-import type { HistoryPoint } from "@/telemetry/TelemetryStore";
+import type { HistoryPoint } from "@/store/telemetryStore";
 
 interface TelemetryChartProps {
   data: HistoryPoint[];
