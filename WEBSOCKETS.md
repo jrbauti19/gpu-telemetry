@@ -1,4 +1,4 @@
-# How Telemetritize Streams & Renders Data
+# How Telemetrize Streams & Renders Data
 
 A walkthrough of how real-time data flows through the app: how WebSockets
 work, **where the transport layer lives**, how component state is managed,
