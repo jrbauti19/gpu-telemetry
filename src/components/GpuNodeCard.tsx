@@ -1,7 +1,5 @@
 import { memo } from "react";
-import { Cpu, Gauge, Thermometer, Zap } from "lucide-react";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { TelemetryChart } from "@/components/TelemetryChart";
 import { useGpuSnapshot } from "@/hooks/useGpuTelemetry";
@@ -20,27 +18,27 @@ interface GpuNodeCardProps {
 }
 
 interface ReadoutProps {
-  icon: React.ReactNode;
   label: string;
   value: string;
+  unit: string;
   colorClass: string;
 }
 
-function Readout({ icon, label, value, colorClass }: ReadoutProps) {
+function Readout({ label, value, unit, colorClass }: ReadoutProps) {
   return (
-    <div className="flex flex-col gap-1">
-      <span className="flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-muted-foreground">
-        {icon}
-        {label}
-      </span>
-      <span
-        className={cn(
-          "font-mono text-lg font-semibold tabular-nums transition-colors duration-300",
-          colorClass
-        )}
-      >
-        {value}
-      </span>
+    <div>
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <p className="mt-0.5 flex items-baseline gap-0.5">
+        <span
+          className={cn(
+            "font-mono text-lg font-semibold tabular-nums transition-colors duration-300",
+            colorClass
+          )}
+        >
+          {value}
+        </span>
+        <span className="font-mono text-xs text-muted-foreground">{unit}</span>
+      </p>
     </div>
   );
 }
@@ -60,7 +58,7 @@ export const GpuNodeCard = memo(function GpuNodeCard({
     return (
       <Card className="h-[320px] animate-pulse opacity-60">
         <CardHeader>
-          <div className="h-4 w-24 rounded bg-secondary" />
+          <div className="h-4 w-24 rounded-sm bg-secondary" />
         </CardHeader>
       </Card>
     );
@@ -102,101 +100,87 @@ export const GpuNodeCard = memo(function GpuNodeCard({
   return (
     <Card
       className={cn(
-        "overflow-hidden transition-shadow duration-500 hover:border-primary/40",
-        isCritical &&
-          "border-red-500/50 shadow-[0_0_0_1px_rgba(239,68,68,0.25),0_0_28px_-8px_rgba(239,68,68,0.5)]"
+        "overflow-hidden transition-colors duration-300 hover:border-border/80",
+        isCritical && "border-red-500/60"
       )}
     >
-      <CardHeader className="flex-row items-start justify-between space-y-0">
-        <div className="flex items-center gap-2.5">
-          <div className="rounded-md bg-primary/10 p-2 text-primary">
-            <Cpu className="h-4 w-4" />
-          </div>
-          <div>
-            <p className="font-mono text-sm font-semibold">
-              {gpuId.toUpperCase()}
-            </p>
-            <p className="text-xs text-muted-foreground">{metric.model}</p>
-          </div>
-        </div>
-        {isCritical ? (
-          <Badge variant="critical" className="animate-pulse-glow">
-            <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
-            CRITICAL
-          </Badge>
-        ) : (
-          <Badge variant="default">
-            <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse-glow" />
-            ACTIVE
-          </Badge>
+      <div
+        className={cn(
+          "h-px w-full",
+          isCritical ? "bg-red-500" : "bg-primary/50"
         )}
+      />
+      <CardHeader className="flex-row items-baseline justify-between space-y-0 pb-4">
+        <div className="flex items-baseline gap-2.5">
+          <p className="font-mono text-base font-semibold tracking-tight">
+            {gpuId.replace("gpu-", "GPU ")}
+          </p>
+          <p className="font-mono text-xs text-muted-foreground">{metric.model}</p>
+        </div>
+        <span
+          className={cn(
+            "font-mono text-[11px] font-medium tracking-wide",
+            isCritical ? "text-red-400" : "text-muted-foreground"
+          )}
+        >
+          {isCritical ? "● CRITICAL" : "○ nominal"}
+        </span>
       </CardHeader>
 
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
+      <CardContent className="space-y-5">
+        <div className="grid grid-cols-3 gap-4">
           <Readout
-            icon={<Gauge className="h-3 w-3" />}
-            label="Utilization"
-            value={`${metric.utilization.toFixed(0)}%`}
+            label="Util"
+            value={metric.utilization.toFixed(0)}
+            unit="%"
             colorClass={severityTextClass[utilSeverity]}
           />
           <Readout
-            icon={<Thermometer className="h-3 w-3" />}
             label="Temp"
-            value={`${metric.temperature.toFixed(0)}°C`}
+            value={metric.temperature.toFixed(0)}
+            unit="°C"
             colorClass={severityTextClass[tempSeverity]}
           />
           <Readout
-            icon={<Zap className="h-3 w-3" />}
             label="Power"
-            value={`${metric.powerDraw.toFixed(0)}W`}
+            value={metric.powerDraw.toFixed(0)}
+            unit="W"
             colorClass={severityTextClass[powerSeverity]}
           />
-          <div className="flex flex-col gap-1">
-            <span className="flex items-center justify-between text-[11px] uppercase tracking-wider text-muted-foreground">
-              VRAM
-              <span className="font-mono normal-case tracking-normal text-foreground">
-                {metric.vramUsage.toFixed(0)}/{metric.vramTotal}GB
-              </span>
-            </span>
-            <Progress
-              className="mt-2"
-              value={vramRatio * 100}
-              indicatorClassName={vramBar}
-            />
-          </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <p className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-              Utilization · 60s
-            </p>
-            <div className="h-20">
-              <TelemetryChart
-                data={history}
-                metricKey="utilization"
-                domain={[0, 100]}
-                unit="%"
-                color={severityStroke[utilSeverity]}
-                gradientId={`util-${gpuId}`}
-              />
-            </div>
+        <div>
+          <div className="mb-1.5 flex items-baseline justify-between">
+            <span className="text-xs text-muted-foreground">VRAM</span>
+            <span className="font-mono text-xs text-foreground">
+              {metric.vramUsage.toFixed(0)}<span className="text-muted-foreground">/{metric.vramTotal} GB</span>
+            </span>
           </div>
-          <div>
-            <p className="mb-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-              Temperature · 60s
-            </p>
-            <div className="h-20">
-              <TelemetryChart
-                data={history}
-                metricKey="temperature"
-                domain={[30, 90]}
-                unit="°C"
-                color={severityStroke[tempSeverity]}
-                gradientId={`temp-${gpuId}`}
-              />
-            </div>
+          <Progress value={vramRatio * 100} indicatorClassName={vramBar} />
+        </div>
+
+        <div className="grid grid-cols-2 gap-x-5 gap-y-1.5">
+          <p className="font-mono text-[11px] text-muted-foreground">util / 60s</p>
+          <p className="font-mono text-[11px] text-muted-foreground">temp / 60s</p>
+          <div className="h-16">
+            <TelemetryChart
+              data={history}
+              metricKey="utilization"
+              domain={[0, 100]}
+              unit="%"
+              color={severityStroke[utilSeverity]}
+              gradientId={`util-${gpuId}`}
+            />
+          </div>
+          <div className="h-16">
+            <TelemetryChart
+              data={history}
+              metricKey="temperature"
+              domain={[30, 90]}
+              unit="°C"
+              color={severityStroke[tempSeverity]}
+              gradientId={`temp-${gpuId}`}
+            />
           </div>
         </div>
       </CardContent>

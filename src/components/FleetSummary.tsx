@@ -1,5 +1,3 @@
-import { Gauge, MemoryStick, Thermometer, Zap } from "lucide-react";
-import { Card } from "@/components/ui/card";
 import { useFleetAggregate } from "@/hooks/useGpuTelemetry";
 import type { TelemetryStore } from "@/telemetry/TelemetryStore";
 import {
@@ -10,36 +8,34 @@ import {
 import { cn } from "@/lib/utils";
 
 interface StatProps {
-  icon: React.ReactNode;
   label: string;
   value: string;
+  unit?: string;
   colorClass?: string;
 }
 
-function Stat({ icon, label, value, colorClass }: StatProps) {
+function Stat({ label, value, unit, colorClass }: StatProps) {
   return (
-    <Card className="flex items-center gap-3 p-4">
-      <div className="rounded-md bg-secondary p-2 text-muted-foreground">
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
-          {label}
-        </p>
-        <p
+    <div className="px-5 py-4 first:pl-6 last:pr-6">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <p className="mt-1.5 flex items-baseline gap-1">
+        <span
           className={cn(
-            "font-mono text-xl font-semibold tabular-nums",
-            colorClass
+            "font-mono text-2xl font-semibold tabular-nums leading-none",
+            colorClass ?? "text-foreground"
           )}
         >
           {value}
-        </p>
-      </div>
-    </Card>
+        </span>
+        {unit && (
+          <span className="font-mono text-xs text-muted-foreground">{unit}</span>
+        )}
+      </p>
+    </div>
   );
 }
 
-/** Fleet-wide KPI strip. Reads the cached aggregate; updates per tick. */
+/** Fleet-wide readout rail. Reads the cached aggregate; updates per tick. */
 export function FleetSummary({ store }: { store: TelemetryStore }) {
   const agg = useFleetAggregate(store);
 
@@ -50,27 +46,27 @@ export function FleetSummary({ store }: { store: TelemetryStore }) {
   );
 
   return (
-    <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <div className="grid grid-cols-2 divide-x divide-y divide-border overflow-hidden rounded-md border border-border bg-card/60 sm:grid-cols-4 sm:divide-y-0">
       <Stat
-        icon={<Gauge className="h-4 w-4" />}
-        label="Avg Utilization"
-        value={`${agg.avgUtilization.toFixed(0)}%`}
+        label="Avg utilization"
+        value={agg.avgUtilization.toFixed(0)}
+        unit="%"
       />
       <Stat
-        icon={<Thermometer className="h-4 w-4" />}
-        label="Peak Temp"
-        value={`${agg.maxTemperature.toFixed(0)}°C`}
+        label="Peak temp"
+        value={agg.maxTemperature.toFixed(0)}
+        unit="°C"
         colorClass={severityTextClass[tempSeverity]}
       />
       <Stat
-        icon={<Zap className="h-4 w-4" />}
-        label="Total Power"
-        value={`${(agg.totalPowerDraw / 1000).toFixed(2)} kW`}
+        label="Draw"
+        value={(agg.totalPowerDraw / 1000).toFixed(2)}
+        unit="kW"
       />
       <Stat
-        icon={<MemoryStick className="h-4 w-4" />}
-        label="VRAM In Use"
-        value={`${agg.totalVramUsage.toFixed(0)}/${agg.totalVramCapacity} GB`}
+        label="VRAM"
+        value={`${agg.totalVramUsage.toFixed(0)}/${agg.totalVramCapacity}`}
+        unit="GB"
       />
     </div>
   );

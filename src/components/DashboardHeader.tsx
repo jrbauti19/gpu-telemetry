@@ -1,8 +1,7 @@
-import { Activity, Radio } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { useLastTimestamp } from "@/hooks/useGpuTelemetry";
 import type { TelemetryStore } from "@/telemetry/TelemetryStore";
 import type { ConnectionStatus } from "@/telemetry/types";
+import { cn } from "@/lib/utils";
 
 interface DashboardHeaderProps {
   status: ConnectionStatus;
@@ -11,58 +10,66 @@ interface DashboardHeaderProps {
 
 const STATUS_META: Record<
   ConnectionStatus,
-  { label: string; variant: "default" | "muted" | "warning" | "critical"; dot: string }
+  { label: string; dot: string; text: string }
 > = {
-  idle: { label: "Idle", variant: "muted", dot: "bg-muted-foreground" },
-  connecting: { label: "Connecting", variant: "warning", dot: "bg-amber-400" },
-  connected: { label: "Live", variant: "default", dot: "bg-primary" },
-  disconnected: { label: "Disconnected", variant: "critical", dot: "bg-red-400" },
+  idle: { label: "STANDBY", dot: "bg-muted-foreground", text: "text-muted-foreground" },
+  connecting: { label: "LINKING", dot: "bg-amber-400", text: "text-amber-400" },
+  connected: { label: "ONLINE", dot: "bg-primary", text: "text-primary" },
+  disconnected: { label: "OFFLINE", dot: "bg-red-500", text: "text-red-400" },
 };
 
 function LastUpdate({ store }: { store: TelemetryStore }) {
   const ts = useLastTimestamp(store);
-  if (!ts) return null;
   return (
-    <span className="hidden font-mono text-xs text-muted-foreground sm:inline">
-      Last frame {new Date(ts).toLocaleTimeString()}
+    <span className="font-mono text-[11px] text-muted-foreground">
+      last frame&nbsp;
+      <span className="text-foreground/80">
+        {ts ? new Date(ts).toLocaleTimeString([], { hour12: false }) : "--:--:--"}
+      </span>
     </span>
   );
 }
 
 /**
- * Top bar with branding and connection state. The status badge only
+ * Top bar with branding and connection state. The status readout only
  * re-renders on lifecycle changes, not on data ticks.
  */
 export function DashboardHeader({ status, store }: DashboardHeaderProps) {
   const meta = STATUS_META[status];
   return (
-    <header className="flex items-center justify-between gap-4 border-b border-border pb-5">
-      <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-          <Activity className="h-5 w-5" />
-        </div>
+    <header className="flex flex-col gap-4 pb-6 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex items-end gap-3">
+        <span
+          aria-hidden
+          className="mb-1 h-8 w-1.5 shrink-0 rounded-full bg-primary"
+        />
         <div>
-          <h1 className="text-lg font-semibold tracking-tight">
-            TensorWave <span className="text-muted-foreground">·</span> GPU
-            Telemetry
-          </h1>
-          <p className="text-xs text-muted-foreground">
-            Real-time cluster monitoring
+          <p className="font-mono text-[11px] uppercase tracking-[0.35em] text-muted-foreground">
+            by Josh B.
           </p>
+          <h1 className="mt-1 text-2xl font-semibold leading-none tracking-tight">
+            Telemetritize
+            <span className="text-primary">.</span>
+          </h1>
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
-        <LastUpdate store={store} />
-        <Badge variant={meta.variant} className="gap-2 px-3 py-1">
-          <Radio className="h-3 w-3" />
+      <div className="flex items-center gap-4 sm:flex-col sm:items-end sm:gap-1.5">
+        <div className="flex items-center gap-2">
           <span
-            className={`h-1.5 w-1.5 rounded-full ${meta.dot} ${
-              status === "connected" ? "animate-pulse-glow" : ""
-            }`}
+            className={cn(
+              "h-2 w-2 rounded-full",
+              meta.dot,
+              status === "connected" && "animate-blink"
+            )}
           />
-          {meta.label}
-        </Badge>
+          <span className={cn("font-mono text-xs font-medium tracking-wide", meta.text)}>
+            {meta.label}
+          </span>
+          <span className="text-border">/</span>
+          <span className="font-mono text-xs text-muted-foreground">RACK-A</span>
+        </div>
+        <LastUpdate store={store} />
       </div>
     </header>
   );

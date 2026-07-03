@@ -28,7 +28,7 @@ export const severityTextClass: Record<MetricSeverity, string> = {
 
 /** Chart/accent stroke color (hex) for a given severity. */
 export const severityStroke: Record<MetricSeverity, string> = {
-  nominal: "#10b981",
+  nominal: "#22d3ee",
   warning: "#f59e0b",
   critical: "#ef4444",
 };

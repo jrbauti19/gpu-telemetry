@@ -37,12 +37,13 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        mono: ["ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
+        sans: ["Space Grotesk", "ui-sans-serif", "system-ui", "sans-serif"],
+        mono: ["JetBrains Mono", "ui-monospace", "SFMono-Regular", "monospace"],
       },
       keyframes: {
-        "pulse-glow": {
+        blink: {
           "0%, 100%": { opacity: "1" },
-          "50%": { opacity: "0.55" },
+          "50%": { opacity: "0.25" },
         },
         "fade-in": {
           "0%": { opacity: "0", transform: "translateY(4px)" },
@@ -50,8 +51,8 @@ export default {
         },
       },
       animation: {
-        "pulse-glow": "pulse-glow 2s ease-in-out infinite",
-        "fade-in": "fade-in 0.3s ease-out",
+        blink: "blink 1.6s steps(2, start) infinite",
+        "fade-in": "fade-in 0.35s ease-out both",
       },
     },
   },

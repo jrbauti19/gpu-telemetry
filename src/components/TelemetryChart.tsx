@@ -40,8 +40,8 @@ function ChartTooltip({
   if (!active || !payload?.length) return null;
   const value = payload[0].value as number;
   return (
-    <div className="rounded-md border border-border bg-background/95 px-3 py-2 shadow-xl backdrop-blur">
-      <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+    <div className="rounded-sm border border-border bg-card px-2.5 py-1.5 shadow-lg">
+      <p className="font-mono text-[10px] text-muted-foreground">
         {timeFmt(label as number)}
       </p>
       <p className="mt-0.5 font-mono text-sm font-semibold text-foreground">
@@ -69,7 +69,7 @@ export const TelemetryChart = memo(function TelemetryChart({
       <AreaChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
         <defs>
           <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={0.35} />
+            <stop offset="0%" stopColor={color} stopOpacity={0.22} />
             <stop offset="100%" stopColor={color} stopOpacity={0} />
           </linearGradient>
         </defs>
@@ -84,7 +84,7 @@ export const TelemetryChart = memo(function TelemetryChart({
           type="monotone"
           dataKey={metricKey}
           stroke={color}
-          strokeWidth={2}
+          strokeWidth={1.5}
           fill={`url(#${gradientId})`}
           isAnimationActive={false}
           dot={false}
