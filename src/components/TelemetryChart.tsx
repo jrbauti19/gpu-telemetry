@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useRef, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -64,33 +64,54 @@ export const TelemetryChart = memo(function TelemetryChart({
   unit,
   gradientId,
 }: TelemetryChartProps) {
+  // While the pointer is over the chart, freeze the series to a snapshot so
+  // the live ~20fps updates don't shift points under the cursor and make the
+  // tooltip jitter. Resume live updates on mouse-leave.
+  const dataRef = useRef(data);
+  dataRef.current = data;
+  const [frozen, setFrozen] = useState<HistoryPoint[] | null>(null);
+  const chartData = frozen ?? data;
+
   return (
-    <ResponsiveContainer width="100%" height="100%">
-      <AreaChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-        <defs>
-          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={color} stopOpacity={0.22} />
-            <stop offset="100%" stopColor={color} stopOpacity={0} />
-          </linearGradient>
-        </defs>
-        <XAxis dataKey="t" hide />
-        <YAxis domain={domain} hide />
-        <Tooltip
-          content={<ChartTooltip unit={unit} />}
-          cursor={{ stroke: color, strokeOpacity: 0.4, strokeDasharray: "3 3" }}
-          isAnimationActive={false}
-        />
-        <Area
-          type="monotone"
-          dataKey={metricKey}
-          stroke={color}
-          strokeWidth={1.5}
-          fill={`url(#${gradientId})`}
-          isAnimationActive={false}
-          dot={false}
-          activeDot={{ r: 3, strokeWidth: 0, fill: color }}
-        />
-      </AreaChart>
-    </ResponsiveContainer>
+    <div
+      className="h-full w-full"
+      onMouseEnter={() => setFrozen(dataRef.current)}
+      onMouseLeave={() => setFrozen(null)}
+    >
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart
+          data={chartData}
+          margin={{ top: 4, right: 4, bottom: 0, left: 0 }}
+        >
+          <defs>
+            <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity={0.22} />
+              <stop offset="100%" stopColor={color} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <XAxis dataKey="t" hide />
+          <YAxis domain={domain} hide />
+          <Tooltip
+            content={<ChartTooltip unit={unit} />}
+            cursor={{
+              stroke: color,
+              strokeOpacity: 0.4,
+              strokeDasharray: "3 3",
+            }}
+            isAnimationActive={false}
+          />
+          <Area
+            type="monotone"
+            dataKey={metricKey}
+            stroke={color}
+            strokeWidth={1.5}
+            fill={`url(#${gradientId})`}
+            isAnimationActive={false}
+            dot={false}
+            activeDot={{ r: 3, strokeWidth: 0, fill: color }}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
   );
 });
