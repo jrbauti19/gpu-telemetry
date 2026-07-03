@@ -1,4 +1,5 @@
 import { DashboardHeader } from "@/components/DashboardHeader";
+import { DemoControlPanel } from "@/components/DemoControlPanel";
 import { FleetSummary } from "@/components/FleetSummary";
 import { GpuNodeCard } from "@/components/GpuNodeCard";
 import { useGpuIds, useTelemetryConnection } from "@/store/telemetryStore";

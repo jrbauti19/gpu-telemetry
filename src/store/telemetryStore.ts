@@ -1,11 +1,12 @@
 import { useEffect } from "react";
 import { create } from "zustand";
 import { MockTelemetryStream } from "@/telemetry/MockTelemetryStream";
-import type {
-  ConnectionStatus,
-  GpuMetric,
-  TelemetryFrame,
-  TelemetryStream,
+import {
+  supportsControls,
+  type ConnectionStatus,
+  type GpuMetric,
+  type TelemetryFrame,
+  type TelemetryStream,
 } from "@/telemetry/types";
 
 /** One sampled point retained in the rolling time-series window. */
@@ -58,10 +59,22 @@ interface TelemetryState {
   snapshots: Record<string, GpuSnapshot>;
   aggregate: FleetAggregate;
   lastTimestamp: number;
+  /** Ids the user has forced into a synthetic critical fault. */
+  faultedGpuIds: string[];
   /** Open the transport and begin ingesting frames. Idempotent. */
   connect: () => void;
   /** Tear down the transport and its subscriptions. */
   disconnect: () => void;
+  /** Demo: flip a GPU in/out of an injected critical fault. */
+  toggleFault: (gpuId: string) => void;
+  /** Demo: clear every injected fault. */
+  clearFaults: () => void;
+  /** Demo: append a new simulated GPU node. */
+  addNode: () => void;
+  /** Demo: remove a node (defaults to the most recently added). */
+  removeNode: (gpuId?: string) => void;
+  /** Demo: simulate a network blip without discarding the stream. */
+  toggleConnection: () => void;
 }
 
 /**
@@ -134,6 +147,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
   snapshots: {},
   aggregate: EMPTY_AGGREGATE,
   lastTimestamp: 0,
+  faultedGpuIds: [],
 
   connect: () => {
     if (stream) return; // already connected
@@ -150,6 +164,43 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
     unsubStatus = null;
     stream?.disconnect();
     stream = null;
+    set({ faultedGpuIds: [] });
+  },
+
+  toggleFault: (gpuId) => {
+    if (!stream || !supportsControls(stream)) return;
+    const faulted = get().faultedGpuIds.includes(gpuId);
+    stream.setFault(gpuId, !faulted);
+    set({
+      faultedGpuIds: faulted
+        ? get().faultedGpuIds.filter((id) => id !== gpuId)
+        : [...get().faultedGpuIds, gpuId],
+    });
+  },
+
+  clearFaults: () => {
+    if (stream && supportsControls(stream)) stream.clearFaults();
+    set({ faultedGpuIds: [] });
+  },
+
+  addNode: () => {
+    if (stream && supportsControls(stream)) stream.addNode();
+  },
+
+  removeNode: (gpuId) => {
+    if (!stream || !supportsControls(stream)) return;
+    stream.removeNode(gpuId);
+    // The mock emits a frame synchronously, so gpuIds is already fresh;
+    // drop any fault ids that no longer correspond to a live node.
+    const live = new Set(get().gpuIds);
+    set({ faultedGpuIds: get().faultedGpuIds.filter((id) => live.has(id)) });
+  },
+
+  toggleConnection: () => {
+    if (!stream) return;
+    const s = get().status;
+    if (s === "connected" || s === "connecting") stream.disconnect();
+    else stream.connect();
   },
 }));
 
@@ -179,3 +230,17 @@ export const useFleetAggregate = (): FleetAggregate =>
 
 export const useLastTimestamp = (): number =>
   useTelemetryStore((s) => s.lastTimestamp);
+
+export const useFaultedGpuIds = (): string[] =>
+  useTelemetryStore((s) => s.faultedGpuIds);
+
+/** Bundle of demo actions for the failure-injection panel. */
+export function useDemoControls() {
+  return {
+    toggleFault: useTelemetryStore((s) => s.toggleFault),
+    clearFaults: useTelemetryStore((s) => s.clearFaults),
+    addNode: useTelemetryStore((s) => s.addNode),
+    removeNode: useTelemetryStore((s) => s.removeNode),
+    toggleConnection: useTelemetryStore((s) => s.toggleConnection),
+  };
+}

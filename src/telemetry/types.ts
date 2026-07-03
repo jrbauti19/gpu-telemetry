@@ -57,5 +57,29 @@ export interface TelemetryStream {
   getStatus(): ConnectionStatus;
 }
 
+/**
+ * Optional demo/testing surface a stream may expose for injecting
+ * faults and mutating fleet membership at runtime. Kept separate from
+ * {@link TelemetryStream} so production transports aren't required to
+ * implement it.
+ */
+export interface TelemetryControls {
+  /** Force a GPU into (or out of) a synthetic critical state. */
+  setFault(gpuId: string, faulted: boolean): void;
+  /** Clear all injected faults. */
+  clearFaults(): void;
+  /** Append a new simulated GPU node. Returns its id. */
+  addNode(): string;
+  /** Remove a node (defaults to the most recently added). */
+  removeNode(gpuId?: string): void;
+}
+
+/** Narrow a stream to one that also supports the demo control surface. */
+export function supportsControls(
+  stream: TelemetryStream
+): stream is TelemetryStream & TelemetryControls {
+  return typeof (stream as Partial<TelemetryControls>).setFault === "function";
+}
+
 /** A metric threshold band for color-coded UI indicators. */
 export type MetricSeverity = "nominal" | "warning" | "critical";

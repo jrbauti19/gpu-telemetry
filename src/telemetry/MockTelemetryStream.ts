@@ -3,6 +3,7 @@ import type {
   GpuMetric,
   MessageHandler,
   StatusHandler,
+  TelemetryControls,
   TelemetryFrame,
   TelemetryStream,
 } from "./types";
@@ -34,6 +35,8 @@ interface GpuSimState {
   vramUsage: number;
   powerDraw: number;
   phase: number;
+  /** When true, the node is driven hard into a critical state. */
+  fault: boolean;
 }
 
 const TICK_MS = 2500;
@@ -79,24 +82,32 @@ function randomWalk(current: number, range: MetricRange): number {
  * Swapping to production is a one-file change: implement the same
  * {@link TelemetryStream} contract against a real `WebSocket` URL.
  */
-export class MockTelemetryStream implements TelemetryStream {
+export class MockTelemetryStream implements TelemetryStream, TelemetryControls {
   private status: ConnectionStatus = "idle";
   private readonly messageHandlers = new Set<MessageHandler>();
   private readonly statusHandlers = new Set<StatusHandler>();
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private connectTimer: ReturnType<typeof setTimeout> | null = null;
   private state: GpuSimState[];
+  /** Monotonic counter so re-added nodes never reuse an id. */
+  private nextId: number;
 
   constructor(profiles: GpuProfile[] = GPU_PROFILES) {
-    this.state = profiles.map((profile, i) => ({
+    this.state = profiles.map((profile, i) => this.seedNode(profile, i));
+    this.nextId = profiles.length;
+  }
+
+  /** Build the initial sim state for one node at a plausible operating point. */
+  private seedNode(profile: GpuProfile, index: number): GpuSimState {
+    return {
       profile,
-      // Seed each node in a plausible, distinct operating point.
       utilization: 40 + Math.random() * 40,
       temperature: 55 + Math.random() * 15,
       vramUsage: 30 + Math.random() * 30,
       powerDraw: 300 + Math.random() * 200,
-      phase: (i / profiles.length) * Math.PI * 2,
-    }));
+      phase: (index / Math.max(1, this.state?.length ?? 4)) * Math.PI * 2,
+      fault: false,
+    };
   }
 
   connect(): void {
@@ -141,6 +152,39 @@ export class MockTelemetryStream implements TelemetryStream {
     this.statusHandlers.forEach((h) => h(next));
   }
 
+  // ---- Demo controls (TelemetryControls) ------------------------------
+
+  setFault(gpuId: string, faulted: boolean): void {
+    const node = this.state.find((s) => s.profile.gpuId === gpuId);
+    if (node) node.fault = faulted;
+  }
+
+  clearFaults(): void {
+    this.state.forEach((s) => (s.fault = false));
+  }
+
+  addNode(): string {
+    const gpuId = `gpu-${this.nextId++}`;
+    const profile: GpuProfile = {
+      gpuId,
+      model: "AMD Instinct MI300X",
+      vramTotal: 192,
+    };
+    this.state.push(this.seedNode(profile, this.state.length));
+    // Surface the new node immediately if we're already streaming.
+    if (this.status === "connected") this.emitFrame();
+    return gpuId;
+  }
+
+  removeNode(gpuId?: string): void {
+    if (this.state.length === 0) return;
+    const index = gpuId
+      ? this.state.findIndex((s) => s.profile.gpuId === gpuId)
+      : this.state.length - 1;
+    if (index >= 0) this.state.splice(index, 1);
+    if (this.status === "connected") this.emitFrame();
+  }
+
   /** Advance the simulation one step and broadcast the frame. */
   private emitFrame(): void {
     const timestamp = Date.now();
@@ -183,6 +227,19 @@ export class MockTelemetryStream implements TelemetryStream {
         ...RANGES.vramUsage,
         max: s.profile.vramTotal,
       });
+
+      // Injected fault: ramp hard toward a sustained critical state so
+      // the UI thresholds and alert styling light up on the next ticks.
+      if (s.fault) {
+        s.utilization = clamp(s.utilization + (100 - s.utilization) * 0.5, 0, 100);
+        s.temperature = clamp(s.temperature + (89 - s.temperature) * 0.4, 30, 90);
+        s.powerDraw = clamp(s.powerDraw + (690 - s.powerDraw) * 0.4, 100, 700);
+        s.vramUsage = clamp(
+          s.vramUsage + (s.profile.vramTotal - s.vramUsage) * 0.4,
+          0,
+          s.profile.vramTotal
+        );
+      }
 
       return {
         gpuId: s.profile.gpuId,
